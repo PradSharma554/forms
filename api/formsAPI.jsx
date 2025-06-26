@@ -12,7 +12,8 @@ async function handleRequest(request) {
   }
 }
 
-export const fetchForms = async (page = 1, limit = 9) => {
+export const fetchForms = async (page = 1, limit = 12) => {
+  await new Promise(resolve => setTimeout(resolve, 500));
   return handleRequest(() => axios.get(`${API_BASE}/forms`, {
     params: { page, limit }
   }));

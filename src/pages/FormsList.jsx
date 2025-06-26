@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, Fragment } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { Button } from '@/atoms/button';
@@ -6,14 +6,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/mol
 import { Plus, FileText, Users, Calendar, MoreVertical, Eye, Edit, Loader2 } from 'lucide-react';
 import Navbar from '@/organisms/NavBar';
 import { fetchForms, deleteForm as deleteFormAPI, fetchFormResponses } from '../../api/formsAPI';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/molecules/dropdown-menu';
-
 import { Dialog, Transition } from '@headlessui/react';
+
+const debounce = (func, wait) => {
+  let timeout;
+  const debounced = (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+  debounced.cancel = () => {
+    clearTimeout(timeout);
+  };
+  return debounced;
+};
 
 const FormsList = () => {
   const navigate = useNavigate();
@@ -22,6 +34,12 @@ const FormsList = () => {
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [formToDelete, setFormToDelete] = useState(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [responsesMap, setResponsesMap] = useState({});
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredForms, setFilteredForms] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const modalRef = useRef(null);
 
   const {
     data,
@@ -32,7 +50,7 @@ const FormsList = () => {
     error,
   } = useInfiniteQuery({
     queryKey: ['forms'],
-    queryFn: ({ pageParam = 1 }) => fetchForms(pageParam, 9),
+    queryFn: ({ pageParam = 1 }) => fetchForms(pageParam, 12),
     getNextPageParam: (lastPage) => {
       if (lastPage.currentPage < lastPage.totalPages) {
         return lastPage.currentPage + 1;
@@ -43,7 +61,7 @@ const FormsList = () => {
     refetchOnWindowFocus: false,
   });
 
-  const forms = data ? data.pages.flatMap(page => page.forms) : [];
+  const forms = useMemo(() => (data ? data.pages.flatMap(page => page.forms) : []), [data]);
 
   const deleteMutation = useMutation({
     mutationFn: deleteFormAPI,
@@ -56,33 +74,28 @@ const FormsList = () => {
       console.error("Error deleting form:", error);
       setIsConfirmOpen(false);
       setFormToDelete(null);
-    }
+    },
   });
 
-  const [responsesMap, setResponsesMap] = useState({});
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filteredForms, setFilteredForms] = useState([]);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const modalRef = useRef(null);
-
   useEffect(() => {
-    const handleScroll = () => {
+    const handleScroll = debounce(() => {
       if (isFetchingNextPage || !hasNextPage) return;
 
       const scrollPosition = window.innerHeight + window.scrollY;
-      const threshold = document.body.offsetHeight - 100; // 100px from the bottom
+      const threshold = document.body.offsetHeight - 100;
 
       if (scrollPosition >= threshold) {
         fetchNextPage();
       }
-    };
+    }, 200);
 
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]); // Dependencies for the effect
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      handleScroll.cancel();
+    };
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
-  // CORRECTED: Removed responsesMap from dependency array
   useEffect(() => {
     const fetchResponsesForForms = async () => {
       if (!forms.length) return;
@@ -102,7 +115,7 @@ const FormsList = () => {
       setResponsesMap(prevMap => ({ ...prevMap, ...newResponsesBatch }));
     };
     fetchResponsesForForms();
-  }, [forms]); // Only re-run when `forms` changes
+  }, [forms]);
 
   const handleCreateForm = () => navigate('/create');
   const handleEditForm = (formId) => navigate(`/edit/${formId}`);
@@ -133,18 +146,20 @@ const FormsList = () => {
     }).format(new Date(date));
   };
 
-  const handleGlobalKeyDown = useCallback((e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault();
-      setSearchOpen(true);
-      setSearchQuery('');
-      // When opening search, ensure filteredForms is set to all forms
-      setFilteredForms(forms);
-    } else if (e.key === 'Escape') {
-      setSearchOpen(false);
-      setIsConfirmOpen(false);
-    }
-  }, [forms]); // `forms` is needed here to initialize `filteredForms` when search opens
+  const handleGlobalKeyDown = useCallback(
+    (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+        setSearchQuery('');
+        setFilteredForms(forms);
+      } else if (e.key === 'Escape') {
+        setSearchOpen(false);
+        setIsConfirmOpen(false);
+      }
+    },
+    [forms]
+  );
 
   useEffect(() => {
     window.addEventListener('keydown', handleGlobalKeyDown);
@@ -157,9 +172,10 @@ const FormsList = () => {
       return;
     }
     const q = searchQuery.toLowerCase();
-    const matched = forms.filter(f =>
-      (f?.title || '').toLowerCase().includes(q) ||
-      (f?.description || '').toLowerCase().includes(q)
+    const matched = forms.filter(
+      f =>
+        (f?.title || '').toLowerCase().includes(q) ||
+        (f?.description || '').toLowerCase().includes(q)
     );
     setFilteredForms(matched);
     setActiveIndex(0);
@@ -280,7 +296,7 @@ const FormsList = () => {
         </div>
 
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Start a new form</h2>
+          <h2 className="text-2xl font-bold text-gray-1200 mb-4">Start a new form</h2>
           <div className="flex space-x-4 justify-center">
             <Card
               className="w-48 h-32 cursor-pointer hover:shadow-md transition-shadow border-2 border-gray-300 hover:border-purple-400"
@@ -295,7 +311,7 @@ const FormsList = () => {
         </div>
 
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent forms</h2>
+          <h2 className="text-2xl font-bold text-gray-1200 mb-6">Recent forms</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {forms.map((form) => {
               const responseCount = responsesMap[form._id] ?? 0;
@@ -305,7 +321,7 @@ const FormsList = () => {
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <CardTitle
-                          className="flex justify-start text-lg font-semibold text-gray-900 truncate group-hover:text-purple-600 transition-colors"
+                          className="flex justify-start text-lg font-semibold text-gray-1200 truncate group-hover:text-purple-600 transition-colors"
                           onClick={() => handleViewForm(form._id)}
                         >
                           {form.title}
@@ -316,7 +332,11 @@ const FormsList = () => {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                          >
                             <MoreVertical className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -365,7 +385,6 @@ const FormsList = () => {
             })}
           </div>
 
-          {/* Loading indicator for infinite scroll */}
           {isFetchingNextPage && (
             <div className="flex justify-center mt-6">
               <Loader2 className="h-6 w-6 text-purple-600 animate-spin" />
@@ -373,7 +392,6 @@ const FormsList = () => {
             </div>
           )}
 
-          {/* Message when all forms are loaded */}
           {!hasNextPage && forms.length > 0 && (
             <p className="text-center text-gray-500 mt-6">No more forms to load.</p>
           )}
@@ -399,17 +417,14 @@ const FormsList = () => {
               <Transition.Child
                 as={Fragment}
                 enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
+                enterFrom="opacity-0 scale-125"
                 enterTo="opacity-100 scale-100"
                 leave="ease-in duration-200"
                 leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
+                leaveTo="opacity-0 scale-125"
               >
                 <Dialog.Panel className="w-full max-w-sm transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title
-                    as="h3"
-                    className="text-lg font-semibold text-gray-900 leading-6 mb-2"
-                  >
+                  <Dialog.Title as="h3" className="text-lg font-semibold text-gray-1200 leading-6 mb-2">
                     Delete form?
                   </Dialog.Title>
                   <div className="mt-2">
@@ -419,10 +434,7 @@ const FormsList = () => {
                   </div>
 
                   <div className="mt-4 flex justify-end space-x-2">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setIsConfirmOpen(false)}
-                    >
+                    <Button variant="ghost" onClick={() => setIsConfirmOpen(false)}>
                       Cancel
                     </Button>
                     <Button
@@ -438,7 +450,6 @@ const FormsList = () => {
               </Transition.Child>
             </div>
           </div>
-
         </Dialog>
       </Transition>
     </div>
