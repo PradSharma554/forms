@@ -8,12 +8,13 @@ export function Button({
   className = "",
   ...props
 }) {
-  const base = "inline-flex items-center justify-center rounded-md font-medium transition disabled:opacity-50 disabled:pointer-events-none";
+  const base = "inline-flex items-center cursor-pointer justify-center rounded-md font-medium transition disabled:opacity-50 disabled:pointer-events-none";
 
   const variants = {
     default: "bg-purple-600 text-white hover:bg-purple-700",
     outline: "border border-gray-300 text-black hover:bg-gray-100",
     ghost: "bg-transparent text-purple-600 hover:bg-purple-100",
+    destructive: "bg-red-500 text-white hover:bg-red-600",
   };
 
   const sizes = {

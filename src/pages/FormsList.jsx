@@ -96,29 +96,7 @@ const FormsList = () => {
     };
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
-  useEffect(() => {
-    const fetchResponsesForForms = async () => {
-      if (!forms.length) return;
-      const newResponsesBatch = {};
-      const formsToProcess = forms.filter(
-        form => form && form._id && responsesMap[form._id] === undefined
-      );
-      if (!formsToProcess.length) return;
-      for (const form of formsToProcess) {
-        try {
-          const responses = await fetchFormResponses(form._id);
-          newResponsesBatch[form._id] = Array.isArray(responses) ? responses.length : 0;
-        } catch (e) {
-          newResponsesBatch[form._id] = 0;
-        }
-      }
-      setResponsesMap(prevMap => ({ ...prevMap, ...newResponsesBatch }));
-    };
-    fetchResponsesForForms();
-  }, [forms]);
-
   const handleCreateForm = () => navigate('/create');
-  const handleEditForm = (formId) => navigate(`/edit/${formId}`);
   const handleViewForm = (formId) => navigate(`/form/${formId}`);
 
   const handleViewResponses = (formId) => {
@@ -264,7 +242,7 @@ const FormsList = () => {
                       handleViewForm(form._id);
                       setSearchOpen(false);
                     }}
-                    className={`cursor-pointer border px-4 py-2 rounded hover:bg-purple-50 ${
+                    className={`border px-4 py-2 rounded hover:bg-purple-50 ${
                       idx === activeIndex ? 'bg-purple-100' : ''
                     }`}
                   >
@@ -291,7 +269,7 @@ const FormsList = () => {
             }}
             readOnly
             placeholder="Search forms... (Cmd/Ctrl + K)"
-            className="w-72 border rounded px-3 py-2 text-sm cursor-pointer text-gray-600 bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-72 border rounded px-3 py-2 text-sm text-gray-600 bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
         </div>
 
@@ -299,7 +277,7 @@ const FormsList = () => {
           <h2 className="text-2xl font-bold text-gray-1200 mb-4">Start a new form</h2>
           <div className="flex space-x-4 justify-center">
             <Card
-              className="w-48 h-32 cursor-pointer hover:shadow-md transition-shadow border-2 border-gray-300 hover:border-purple-400"
+              className="w-48 h-32 hover:shadow-md transition-shadow cursor-pointer border-2 border-gray-300 hover:border-purple-400"
               onClick={handleCreateForm}
             >
               <CardContent className="flex flex-col items-center justify-center h-full">
@@ -316,12 +294,12 @@ const FormsList = () => {
             {forms.map((form) => {
               const responseCount = responsesMap[form._id] ?? 0;
               return (
-                <Card key={form._id} className="hover:shadow-lg transition-shadow cursor-pointer group">
+                <Card key={form._id} className="hover:shadow-lg transition-shadow group">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <CardTitle
-                          className="flex justify-start text-lg font-semibold text-gray-1200 truncate group-hover:text-purple-600 transition-colors"
+                          className="flex w-max cursor-pointer justify-start text-lg font-semibold text-gray-1200 truncate group-hover:text-purple-600 transition-colors"
                           onClick={() => handleViewForm(form._id)}
                         >
                           {form.title}
@@ -330,32 +308,9 @@ const FormsList = () => {
                           {form.description || 'No description'}
                         </CardDescription>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleViewForm(form._id)}>View Form</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEditForm(form._id)}>Edit</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleViewResponses(form._id)}>
-                            View Responses ({responseCount})
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDeleteForm(form._id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
                   </CardHeader>
+
                   <CardContent className="pt-0">
                     <div className="flex items-center justify-between text-sm text-gray-500">
                       <div className="flex items-center space-x-4">
@@ -363,20 +318,31 @@ const FormsList = () => {
                           <Calendar className="w-4 h-4 mr-1" />
                           {formatDate(form.createdAt)}
                         </div>
-                        <div className="flex items-center">
-                          <Users className="w-4 h-4 mr-1" />
-                          {responseCount} responses
-                        </div>
                       </div>
                     </div>
                     <div className="mt-3 flex space-x-2">
-                      <Button size="sm" variant="outline" onClick={() => handleViewForm(form._id)} className="flex-1">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => handleViewForm(form._id)}
+                      >
                         <Eye className="w-4 h-4 mr-1" />
                         View
                       </Button>
-                      <Button size="sm" onClick={() => handleEditForm(form._id)} className="flex-1">
-                        <Edit className="w-4 h-4 mr-1" />
-                        Edit
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleViewResponses(form._id)}
+                      >
+                        <Users className="w-4 h-4 mr-1" />
+                        Responses
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDeleteForm(form._id)}
+                      >
+                        Delete
                       </Button>
                     </div>
                   </CardContent>
